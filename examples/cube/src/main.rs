@@ -4,9 +4,9 @@ use std::{collections::HashMap, error::Error, ffi::CStr, fs::{read_dir, write, D
 
 use ash::vk::{self, AttachmentReference, BufferUsageFlags, CommandBuffer, CommandBufferLevel, Extent2D, Extent3D, Fence, FenceCreateFlags, Format, PhysicalDeviceType, PipelineBindPoint, PresentModeKHR, PrimitiveTopology, SurfaceFormatKHR, VertexInputAttributeDescription, VertexInputBindingDescription, API_VERSION_1_0, API_VERSION_1_3};
 
-use ferrum::assets::*;
-use ferrum::render::*;
-use ferrum::graph::*;
+use ferrum_assets::*;
+use ferrum_render::*;
+use ferrum_graph::*;
 
 use winit::raw_window_handle::*;
 use log::*;
@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //------
     // Загрузка изображения shared\assets\texture\texture0.jpg
 
-    let image = image::open(r"..\shared\assets\texture\texture0.jpg")
+    let image = image::open(r"..\..\shared\assets\texture\texture0.jpg")
         .expect("Error open image")
         .to_rgba8();
 
@@ -330,11 +330,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let pipeline = StandartPipelineBuilder::new()
         .with_graphics_device(&ctx)
-        .with_fragment_shader(load_spv(r"..\shared\shaders\spv\triangle-frag.spv"))
-        .with_vertex_shader(load_spv(r"..\shared\shaders\spv\triangle-vert.spv"))
+        .with_fragment_shader(load_spv(r"..\..\shared\shaders\spv\triangle-frag.spv"))
+        .with_vertex_shader(load_spv(r"..\..\shared\shaders\spv\triangle-vert.spv"))
         .build(layout[0]);
 
-    let (data, index) = &load_model(r"..\shared\assets\models\cube.obj").expect("EEEER");
+    let (data, index) = &load_model(r"..\..\shared\assets\models\cube.obj").expect("EEEER");
 
     let command_pool = CommandPoolBuilder::new()
         .device(&ctx.device.raw_device())
