@@ -5,7 +5,7 @@ Ferrum is an experiment in creating a 2D/3D engine with graphical techniques fro
 
 # Preiew
 
-https://github.com/olejaaaaaaaa/ferrum/blob/main/shared/assets/texture/2025-08-03%2017-51-59.mp4
+https://github.com/user-attachments/assets/c23b24b1-c1c0-49cd-8238-643bca31abc4
 
 # The main goals of the engine:
 
