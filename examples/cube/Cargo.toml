@@ -11,4 +11,6 @@ log = "0.4"
 env_logger = { version = "0.11.8", features = ["color"] }
 cfg-if = { version = "1" }
 image = { version = "0.25.6", features = ["png", "jpeg"] }
-ferrum = { path = "../.." }
+ferrum-render = { path = "../../crates/ferrum-render" }
+ferrum-graph = { path = "../../crates/ferrum-graph" }
+ferrum-assets = { path = "../../crates/ferrum-assets" }

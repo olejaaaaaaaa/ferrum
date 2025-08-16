@@ -1,6 +1,6 @@
 #![warn(unused_qualifications)]
 
-use std::{collections::HashMap, error::Error, ffi::CStr, fs::{read_dir, write, DirEntry, File}, io::Read, mem::offset_of, panic, process::Command, rc::Rc, sync::Arc, time::Instant, u64};
+use std::{collections::HashMap, error::Error, ffi::CStr, fs::{read_dir, write, DirEntry, File}, io::Read, mem::offset_of, panic, path::Path, process::Command, rc::Rc, sync::Arc, time::Instant, u64};
 
 use ash::vk::{self, AttachmentReference, BufferUsageFlags, CommandBuffer, CommandBufferLevel, Extent2D, Extent3D, Fence, FenceCreateFlags, Format, PhysicalDeviceType, PipelineBindPoint, PresentModeKHR, PrimitiveTopology, SurfaceFormatKHR, VertexInputAttributeDescription, VertexInputBindingDescription, API_VERSION_1_0, API_VERSION_1_3};
 
@@ -334,7 +334,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .with_vertex_shader(load_spv(r"..\..\shared\shaders\spv\triangle-vert.spv"))
         .build(layout[0]);
 
-    let (data, index) = &load_model(r"..\..\shared\assets\models\cube.obj").expect("EEEER");
+    //let (data, index) = &load_model(r"..\..\shared\assets\models\cube.obj").expect("EEEER");
+
+    let mesh = load_gltf_model(r"C:\Users\Oleja\Desktop\ferrum\shared\assets\models\girl2.glb").expect("EEEER");
+    let mut data = vec![];
+
+    for (index, _data) in mesh.positions.iter().enumerate() {
+        data.push(Vertex { pos: *_data, color: mesh.colors[index] });
+    }
+
+    let index = mesh.indices;
 
     let command_pool = CommandPoolBuilder::new()
         .device(&ctx.device.raw_device())
@@ -534,7 +543,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             device.cmd_bind_index_buffer(command_buffer, index_buffer.raw, 0, vk::IndexType::UINT32);
             device.cmd_draw_indexed(
                 command_buffer,
-                36,
+                index.len() as u32,
                 1,
                 0,
                 0,
@@ -553,9 +562,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut count_frame = 0;
 
     let mut angle = 0.0f32; // Угол в радианах
-    let rotation_speed = 0.001; // Скорость вращения (рад/сек)
-
-    println!("Index count: {:?}", index.len());
+    let rotation_speed = 0.0001; // Скорость вращения (рад/сек)
 
     let _ = main_loop.run(move |ev, ev_window| {
     match ev {
