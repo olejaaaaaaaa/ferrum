@@ -1,3 +1,4 @@
+[![CI Status](https://github.com/olejaaaaaaaa/ferrum/actions/workflows/rust.yml/badge.svg)](https://github.com/olejaaaaaaaa/ferrum/actions)
 
 # Ferrum
 
