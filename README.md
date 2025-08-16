@@ -3,6 +3,10 @@
 
 Ferrum is an experiment in creating a 2D/3D engine with graphical techniques from AAA engines
 
+# Preiew
+
+https://github.com/olejaaaaaaaa/ferrum/blob/main/shared/assets/texture/2025-08-03%2017-51-59.mp4
+
 # The main goals of the engine:
 
     - Be productive and not waste resources In vain, but
