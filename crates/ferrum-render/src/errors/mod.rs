@@ -5,10 +5,20 @@ pub use instance::InstanceError;
 pub mod app;
 pub use app::AppError;
 
-#[derive(Debug)]
+pub mod phys_dev;
+pub use phys_dev::PhysicalDeviceError;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
 pub enum VulkanError {
+    #[error("App error: {0}")]
     App(AppError),
-    Instance(InstanceError)
+    #[error("Instance error: {0}")]
+    Instance(InstanceError),
+    #[error("Physical device error: {0}")]
+    PhysicalDevice(PhysicalDeviceError),
+    #[error("Unknown error")]
+    Unknown,
 }
 
 pub type VulkanResult<T> = core::result::Result<T, VulkanError>;
