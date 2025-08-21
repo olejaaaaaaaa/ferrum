@@ -2,10 +2,16 @@
 name = "ferrum-assets"
 version = "0.1.0"
 edition = "2024"
+authors = ["Oleg Pavlenko"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/olejaaaaaaaa/ferrum/crates/ferrum-assets"
 
 [dependencies]
 gltf = "1.4.1"
 bytemuck = "1.0"
 image = "0.25.6"
-log = "*"
-tobj = "*"
+log = "0.4"
+
+[features]
+default = ["gltf"]
+gltf = []
