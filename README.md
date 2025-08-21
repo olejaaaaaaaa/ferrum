@@ -1,7 +1,12 @@
+[![CI Status](https://github.com/olejaaaaaaaa/ferrum/actions/workflows/rust.yml/badge.svg)](https://github.com/olejaaaaaaaa/ferrum/actions)
 
 # Ferrum
 
 Ferrum is an experiment in creating a 2D/3D engine with graphical techniques from AAA engines
+
+# Preview
+
+https://github.com/user-attachments/assets/c23b24b1-c1c0-49cd-8238-643bca31abc4
 
 # The main goals of the engine:
 
