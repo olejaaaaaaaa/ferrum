@@ -12,32 +12,59 @@ use log::info;
 use crate::core::PhysicalDeviceInfo;
 use core::ffi::{self, c_char};
 
+// pub unsafe extern "system" fn vulkan_debug_callback(
+//     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+//     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+//     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT<'_>,
+//     _user_data: *mut std::os::raw::c_void,
+// ) -> vk::Bool32 {
+
+//     let callback_data = *p_callback_data;
+
+//     let message = if callback_data.p_message.is_null() {
+//         Cow::from("")
+//     } else {
+//         ffi::CStr::from_ptr(callback_data.p_message).to_string_lossy()
+//     };
+
+//     if message_severity == DebugUtilsMessageSeverityFlagsEXT::VERBOSE {
+//         log::warn!("{}", message);
+//     }
+
+//     if message_severity == DebugUtilsMessageSeverityFlagsEXT::ERROR {
+//         log::error!("{}", message)
+//     }
+
+//     // if message_severity == DebugUtilsMessageSeverityFlagsEXT::INFO {
+//     //     log::info!("{}", message)
+//     // }
+
+//     vk::FALSE
+// }
+
 pub unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT<'_>,
-    _user_data: *mut std::os::raw::c_void,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _p_user_data: *mut std::ffi::c_void,
 ) -> vk::Bool32 {
-
-    let callback_data = *p_callback_data;
-
-    let message = if callback_data.p_message.is_null() {
-        Cow::from("")
-    } else {
-        ffi::CStr::from_ptr(callback_data.p_message).to_string_lossy()
+    let severity = match message_severity {
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => "[VERBOSE]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => "[INFO]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => "[WARNING]",
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => "[ERROR]",
+        _ => "[UNKNOWN]",
     };
 
-    if message_severity == DebugUtilsMessageSeverityFlagsEXT::WARNING {
-        log::warn!("{}", message);
-    }
+    let types = match message_type {
+        vk::DebugUtilsMessageTypeFlagsEXT::GENERAL => "GENERAL",
+        vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION => "VALIDATION",
+        vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE => "PERFORMANCE",
+        _ => "UNKNOWN",
+    };
 
-    if message_severity == DebugUtilsMessageSeverityFlagsEXT::ERROR {
-        log::error!("{}", message)
-    }
-
-    // if message_severity == DebugUtilsMessageSeverityFlagsEXT::INFO {
-    //     log::info!("{}", message)
-    // }
+    let message = std::ffi::CStr::from_ptr((*p_callback_data).p_message);
+    println!("[Vulkan {} {}] {:?}", types, severity, message);
 
     vk::FALSE
 }

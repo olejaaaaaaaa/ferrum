@@ -107,6 +107,14 @@ impl<'n> AppBuilder<'n> {
                 .map_err(|e| VulkanError::App(AppError::LoadingVulkanApiVersion(e)))?
         };
 
+        let api_ver = available_version.unwrap();
+
+         println!("Vulkan version: {}.{}.{}",
+            vk::api_version_major(api_ver),
+            vk::api_version_minor(api_ver),
+            vk::api_version_patch(api_ver)
+        );
+
         api_version = select_supported_api_version(api_version, available_version);
 
         let app_info = ApplicationInfo::default()
@@ -180,7 +188,7 @@ mod tests {
         let result = AppBuilder::new()
             .with_app_name(app_name)
             .with_app_version(1)
-            .with_api_version(vk::API_VERSION_1_0)
+            .with_api_version(vk::API_VERSION_1_3)
             .build();
 
         assert!(result.is_ok());

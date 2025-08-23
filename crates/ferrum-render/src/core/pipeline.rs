@@ -128,7 +128,7 @@ impl<'n> RenderPipelineBuilder<'n> {
             .rasterizer_discard_enable(false)
             .polygon_mode(PolygonMode::FILL)
             .line_width(1.0)
-            .cull_mode(CullModeFlags::NONE)
+            .cull_mode(CullModeFlags::BACK)
             .front_face(FrontFace::COUNTER_CLOCKWISE)
             .depth_bias_enable(false)
             .depth_bias_constant_factor(0.0)
@@ -188,7 +188,7 @@ impl<'n> RenderPipelineBuilder<'n> {
             .rasterization_state(&rasterizer_info)
             .multisample_state(&multisampling_info)
             .color_blend_state(&color_blending_info)
-            .depth_stencil_state(&depth_stencil_info)
+            .depth_stencil_state(&depth_stencil_info) // <--- ЭТА СТРОКА ОБЯЗАТЕЛЬНА!
             .layout(pipeline_layout)
             .render_pass(*self.render_pass.unwrap())
             .dynamic_state(&dynamic_state_info);

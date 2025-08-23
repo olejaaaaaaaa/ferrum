@@ -3,14 +3,14 @@ use ash::vk::{PhysicalDevice, QueueFlags};
 
 
 #[derive(Default)]
-pub struct QueuesFamilyBuilder<'n> {
+pub struct QueueFamiliesBuilder<'n> {
     prop: Option<&'n Vec<ash::vk::QueueFamilyProperties>>,
     surface_load: Option<&'n ash::khr::surface::Instance>,
     surface: Option<&'n ash::vk::SurfaceKHR>,
     phys_dev: Option<&'n PhysicalDevice>
 }
 
-impl<'n> QueuesFamilyBuilder<'n> {
+impl<'n> QueueFamiliesBuilder<'n> {
 
     pub fn new() -> Self {
         Self { ..Default::default() }
@@ -36,7 +36,7 @@ impl<'n> QueuesFamilyBuilder<'n> {
         self
     }
 
-    pub fn build(self)  -> Vec<QueueFamily> {
+    pub fn build(self)  -> Vec<QueueFamilies> {
 
         let mut res = vec![];
 
@@ -46,8 +46,10 @@ impl<'n> QueuesFamilyBuilder<'n> {
         let phys_dev = self.phys_dev.unwrap();
 
         for (index, prop) in families.iter().enumerate() {
+
             let support = unsafe { surface_load.get_physical_device_surface_support(*phys_dev, index as u32, *surface).unwrap_or(false) };
-            res.push(QueueFamily{
+
+            res.push(QueueFamilies {
                 index: index as u32,
                 properties: *prop,
                 supports_present: support
@@ -59,14 +61,14 @@ impl<'n> QueuesFamilyBuilder<'n> {
 }
 
 #[derive(Debug)]
-pub struct QueueFamily {
+pub struct QueueFamilies {
     pub index: u32,
     pub properties: ash::vk::QueueFamilyProperties,
     pub supports_present: bool,
 }
 
 pub struct UniversalQueue {
-    pub queue_family: Vec<QueueFamily>,
+    pub queue_family: Vec<QueueFamilies>,
     pub raw: Vec<Vec<ash::vk::Queue>>
 }
 
@@ -94,7 +96,7 @@ impl UniversalQueue {
         panic!("Not found Graphics Index")
     }
 
-    pub fn new(device: &ash::Device, family: Vec<QueueFamily>) -> Self {
+    pub fn new(device: &ash::Device, family: Vec<QueueFamilies>) -> Self {
 
         let mut queue = vec![];
 

@@ -11,7 +11,7 @@ pub struct Device {
 pub struct DeviceBuilder<'n> {
     extensions: Vec<*const i8>,
     features: Option<PhysicalDeviceFeatures>,
-    family: Option<&'n Vec<QueueFamily>>,
+    family: Option<&'n Vec<QueueFamilies>>,
     insatnce: Option<&'n ash::Instance>,
     phys_dev: Option<&'n ash::vk::PhysicalDevice>,
     #[allow(dead_code)]
@@ -33,7 +33,7 @@ impl<'n> DeviceBuilder<'n> {
         self
     }
 
-    pub fn queue_family(mut self, family: &'n Vec<QueueFamily>) -> Self {
+    pub fn queue_family(mut self, family: &'n Vec<QueueFamilies>) -> Self {
         self.family = Some(family);
         self
     }

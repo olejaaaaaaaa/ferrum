@@ -8,11 +8,13 @@ use ash::{
 };
 
 use crate::VulkanError;
-use crate::{vulkan_debug_callback, App, InstanceError, VulkanResult};
+use crate::{vulkan_debug_callback, InstanceError, VulkanResult};
 
 #[derive(Default)]
 pub struct InstanceBuilder<'n> {
-    app: Option<App<'n>>,
+    app: Option<ash::vk::ApplicationInfo<'n>>,
+    entry: Option<ash::Entry>,
+    api_version: Option<u32>,
     flags: Option<InstanceCreateFlags>,
     extensions: Vec<*const i8>,
     layers: Vec<*const i8>,
@@ -63,9 +65,18 @@ impl<'n> InstanceBuilder<'n> {
         Self { ..Default::default() }
     }
 
-    /// Обязательный параметр
-    pub fn with_app(mut self, app: App<'n>) -> Self {
+    pub fn with_app(mut self, app: ApplicationInfo<'n>) -> Self {
         self.app = Some(app);
+        self
+    }
+
+    pub fn with_api_version(mut self, api_version: u32) -> Self {
+        self.api_version = Some(api_version);
+        self
+    }
+
+    pub fn with_entry(mut self, entry: Entry) -> Self {
+        self.entry = Some(entry);
         self
     }
 
@@ -108,6 +119,7 @@ impl<'n> InstanceBuilder<'n> {
     pub fn build(self) -> VulkanResult<Instance> {
 
         let app = self.app.ok_or(crate::VulkanError::Instance(InstanceError::MissingApp))?;
+        let entry = self.entry.unwrap();
         let flags = self.flags.unwrap_or(InstanceCreateFlags::default());
         let allocation_callbacks = self.allocation_callbacks;
         let mut layers = self.layers;
@@ -119,22 +131,27 @@ impl<'n> InstanceBuilder<'n> {
         #[cfg(debug_assertions)]
         add_debug_layers(&mut layers, &self.debug_layers);
 
-        assert!(check_support_layers(&app.entry, &layers).is_ok());
+        assert!(check_support_layers(&entry, &layers).is_ok());
+
+
+        for i in &ext {
+            unsafe { println!("ext {:?}", CStr::from_ptr(i.clone())); }
+        }
 
         let create_info = InstanceCreateInfo::default()
-            .application_info(&app.raw)
+            .application_info(&app)
             .enabled_extension_names(&ext)
             .enabled_layer_names(&layers)
             .flags(flags);
 
-        let instance = unsafe { app.entry.create_instance(&create_info, allocation_callbacks.as_ref()).expect("Error create Instance") };
+        let instance = unsafe { entry.create_instance(&create_info, allocation_callbacks.as_ref()).expect("Error create Instance") };
 
         #[cfg(debug_assertions)]
-        let (debug_utils_loader, debug_callback) = create_debug_utils_messenger(&app.entry, &instance)?;
+        let (debug_utils_loader, debug_callback) = create_debug_utils_messenger(&entry, &instance)?;
 
         Ok(Instance {
             raw: instance,
-            entry: app.entry,
+            entry: entry,
             api_version: app.api_version,
             allocation_callbacks: allocation_callbacks,
             #[cfg(debug_assertions)]
@@ -192,17 +209,18 @@ fn create_debug_utils_messenger(entry: &Entry, instance: &ash::Instance) -> Vulk
     use ash::vk;
 
     let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
-        .message_severity(
-            vk::DebugUtilsMessageSeverityFlagsEXT::ERROR |
-            vk::DebugUtilsMessageSeverityFlagsEXT::WARNING |
-            vk::DebugUtilsMessageSeverityFlagsEXT::INFO
-        )
-        .message_type(
-            vk::DebugUtilsMessageTypeFlagsEXT::GENERAL |
-            vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION |
-            vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
-        )
-        .pfn_user_callback(Some(vulkan_debug_callback));
+    .message_severity(
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE |
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING |
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+    )
+    .message_type(
+        vk::DebugUtilsMessageTypeFlagsEXT::GENERAL |
+        vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION |
+        vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
+    )
+    .pfn_user_callback(Some(vulkan_debug_callback));
 
     let loader = debug_utils::Instance::new(entry, instance);
     let callback = unsafe {
@@ -241,7 +259,7 @@ mod tests {
             .unwrap();
 
         let insatnce = InstanceBuilder::new()
-            .with_app(app)
+            .with_app(app.raw)
             .build();
 
         assert_eq!(insatnce.is_ok(), true)
@@ -268,7 +286,6 @@ mod tests {
         ];
 
         assert!(check_support_layers(&entry, &required2).is_err());
-
     }
 }
 

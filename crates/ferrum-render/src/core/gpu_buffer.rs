@@ -1,6 +1,7 @@
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
 use log::warn;
 use crate::{find_memorytype_index};
+use vk_mem::Allocator;
 
 ///
 /// Wraper around [`ash::vk::Buffer`] for simple use
@@ -23,6 +24,7 @@ use crate::{find_memorytype_index};
 /// }
 /// ```
 ///
+#[derive(Clone)]
 pub struct GPUBuffer {
     pub raw: vk::Buffer,
     pub memory: vk::DeviceMemory,
@@ -41,7 +43,7 @@ impl GPUBuffer {
     ) -> Result<Self, vk::Result> {
 
         // Buffer with size 0? WTF?
-        assert_ne!(size, 0);
+        assert_ne!(size, 0, "No");
 
         let buffer_info = vk::BufferCreateInfo::default()
             .size(size)
@@ -76,6 +78,7 @@ impl GPUBuffer {
 
         let data_size = (std::mem::size_of_val(data)) as u64;
         assert!(data_size <= self.size, "Data too large for buffer {:?} > {:?}", data_size, self.size);
+        assert_ne!(data_size, 0);
 
         let ptr = unsafe {
             device.map_memory(
