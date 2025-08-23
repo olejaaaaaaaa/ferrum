@@ -1,0 +1,15 @@
+[package]
+name = "editor-standalone"
+version = "0.1.0"
+edition = "2024"
+authors = ["Oleg Pavlenko"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/olejaaaaaaaa/ferrum/crates/editor-standalone"
+
+[dependencies]
+ferrum-render = { path = "../../crates/ferrum-render" }
+ferrum-graph = { path = "../../crates/ferrum-graph" }
+ferrum-assets = { path = "../../crates/ferrum-assets" }
+ferrum-ui = { path = "../../crates/ferrum-ui" }
+winit = { version = "0.29", features = ["rwh_06"] }
+clap = { version = "4.5.43", features = ["derive"] }
