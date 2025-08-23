@@ -18,5 +18,4 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Build and run cube example
-      run: cargo run --example cube --release
-
+      run: cargo run --manifest-path ferrum/examples/cube/Cargo.toml --release
