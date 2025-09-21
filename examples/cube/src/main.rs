@@ -1,67 +1,46 @@
 #![warn(unused_qualifications)]
 
-use std::{collections::HashMap, error::Error, ffi::CStr, fs::{read_dir, write, DirEntry, File}, io::Read, mem::offset_of, panic, path::Path, process::Command, rc::Rc, sync::Arc, time::Instant, u64};
+use std::{
+    cell::RefCell, collections::HashMap, error::Error, ffi::CStr, fs::{read_dir, write, DirEntry, File}, io::Read, mem::{offset_of, ManuallyDrop}, panic, path::Path, process::Command, rc::Rc, sync::Arc, time::{Duration, Instant}, u64
+};
 
-use ash::vk::{self, AttachmentReference, BufferUsageFlags, CommandBuffer, CommandBufferLevel, Extent2D, Extent3D, Fence, FenceCreateFlags, Format, PhysicalDeviceType, PipelineBindPoint, PresentModeKHR, PrimitiveTopology, SurfaceFormatKHR, VertexInputAttributeDescription, VertexInputBindingDescription, API_VERSION_1_0, API_VERSION_1_3};
+use ash::{
+    khr::uniform_buffer_standard_layout,
+    vk::{
+        self, AttachmentReference, BufferUsageFlags, ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, DescriptorType, Extent2D, Extent3D, Fence, FenceCreateFlags, FenceCreateInfo, Format, Handle, IndexType, MemoryPropertyFlags, Offset2D, PhysicalDeviceType, PipelineBindPoint, PipelineVertexInputStateCreateInfo, PresentModeKHR, PrimitiveTopology, QueueFlags, Rect2D, ShaderStageFlags, SurfaceFormatKHR, VertexInputAttributeDescription, VertexInputBindingDescription, Viewport, API_VERSION_1_0, API_VERSION_1_3
+    },
+};
 
-use ferrum_assets::*;
-use ferrum_render::*;
-use ferrum_graph::*;
-
-use winit::raw_window_handle::*;
+use egui::TextureId;
+use ferrum_assets::load_gltf;
+use ferrum_graph::RenderGraph;
+use ferrum_render::{
+   CommandPoolBuilder,
+   RenderContext,
+   RenderPipelineBuilder,
+};
+use ferrum_resources::DescriptorManager;
 use log::*;
 use winit::{dpi::PhysicalSize, raw_window_handle::HasDisplayHandle};
+use winit::{
+    event::Event,
+    event_loop::{EventLoop, EventLoopWindowTarget},
+    raw_window_handle::*,
+    window::{self, Window},
+};
 
+use ferrum_types::{AttributeDescriptions, BindingDescriptions, PBRVertex, Vertex};
+use ferrum_render::ShaderProgramBuilder;
+use ferrum_ui::*;
 
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
-struct Vertex {
-    pos: [f32; 3],
-    color: [f32; 3],
+struct UniformBufferObject {
+    model: [[f32; 4]; 4],
+    view: [[f32; 4]; 4],
+    projection: [[f32; 4]; 4],
 }
 
-pub fn find_memorytype_index(
-    memory_req: &vk::MemoryRequirements,
-    memory_prop: &vk::PhysicalDeviceMemoryProperties,
-    flags: vk::MemoryPropertyFlags,
-) -> Option<u32> {
-    memory_prop.memory_types[..memory_prop.memory_type_count as _]
-        .iter()
-        .enumerate()
-        .find(|(index, memory_type)| {
-            (1 << index) & memory_req.memory_type_bits != 0
-                && memory_type.property_flags & flags == flags
-        })
-        .map(|(index, _memory_type)| index as _)
-}
-
-impl Vertex {
-
-    fn get_binding_descriptions() -> [vk::VertexInputBindingDescription; 1] {
-        [vk::VertexInputBindingDescription {
-            binding: 0,
-            stride: std::mem::size_of::<Self>() as u32,
-            input_rate: vk::VertexInputRate::VERTEX,
-        }]
-    }
-
-    fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
-        [
-            vk::VertexInputAttributeDescription {
-                location: 0,
-                binding: 0,
-                format: vk::Format::R32G32B32_SFLOAT,
-                offset: offset_of!(Self, pos) as u32,
-            },
-            vk::VertexInputAttributeDescription {
-                binding: 0,
-                location: 1,
-                format: vk::Format::R32G32B32_SFLOAT,
-                offset: offset_of!(Self, color) as u32,
-            },
-        ]
-    }
-}
 
 fn rotation_matrix(angle_rad: f32, axis: [f32; 3]) -> [[f32; 4]; 4] {
     let (sin, cos) = angle_rad.sin_cos();
@@ -78,22 +57,10 @@ fn rotation_matrix(angle_rad: f32, axis: [f32; 3]) -> [[f32; 4]; 4] {
     ]
 }
 
-
-#[derive(Copy, Clone, Debug, Default)]
-#[repr(C)]
-struct UniformBufferObject {
-    model: [[f32; 4]; 4],
-    view: [[f32; 4]; 4],
-    projection: [[f32; 4]; 4],
-}
-
-
-
-
-
 fn main() -> Result<(), Box<dyn Error>> {
 
     unsafe { std::env::set_var("RUST_LOG", "DEBUG") };
+
     env_logger::init();
 
     let main_loop = winit::event_loop::EventLoop::new().unwrap();
@@ -103,134 +70,48 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build(&main_loop)
         .unwrap();
 
-    let mut ctx: RenderContext = RenderContext::default(window);
+    let egui_ctx = egui::Context::default();
+    egui_extras::install_image_loaders(&egui_ctx);
 
+    let egui_winit = egui_winit::State::new(
+        egui_ctx.clone(),
+        egui::ViewportId::ROOT,
+        &window,
+        None,
+        None,
+        None,
+    );
 
-    //------
-    // Загрузка изображения shared\assets\texture\texture0.jpg
+    let mut ctx = RenderContext::default(window);
 
-    let image = image::open(r"..\..\shared\assets\texture\texture0.jpg")
-        .expect("Error open image")
-        .to_rgba8();
+    let mut ui: Arc<RefCell<Renderer>> = Arc::new(RefCell::new(Renderer::with_default_allocator(
+        ctx.device.raw_instance(),
+        ctx.device.phys_dev.raw,
+        ctx.device.logical_device.raw.clone().as_ref().clone(),
+        ctx.window.render_pass.raw,
+        Options {
+            in_flight_frames: ctx.window.frame_buffers.raw.len(),
+            enable_depth_test: false,
+            enable_depth_write: false,
+            srgb_framebuffer: true
+        }
+    ).unwrap()));
 
-    let (image_width, image_height) = image.dimensions();
+    let model = load_gltf(&ctx, r"C:\Users\Oleja\Desktop\ferrum\shared\assets\models\box.glb");
 
-    let image_bytes = image.into_raw();
-
-    let image_buffer = GPUBuffer::new(
-        ctx.device.raw_device(),
-        &ctx.device.phys_dev.phys_info.memory_prop,
-        (size_of::<u8>() * image_bytes.len()) as u64,
-         vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
-    ).unwrap();
-
-    image_buffer.upload_data(ctx.device.raw_device(), &image_bytes);
-
-    let texture = Texture::new(ctx.device.raw_device(), Extent3D {
-        width: image_width,
-        height: image_height,
-        depth: 1
-    }, ctx.window.surface_format_khr.format);
-
-    let mem_requirements = unsafe {
-        ctx.device.raw_device().get_image_memory_requirements(texture.raw)
-    };
-
-    let texture_image_memory = unsafe {
-        ctx.device.raw_device().allocate_memory(
-            &vk::MemoryAllocateInfo::default()
-                .allocation_size(mem_requirements.size)
-                .memory_type_index(
-                    find_memorytype_index(
-                        &mem_requirements,
-                        &ctx.device.phys_dev.phys_info.memory_prop,
-                        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                    )
-                    .expect("Failed to find suitable memory type"),
-                ),
-            None,
-        )
-        .expect("Failed to allocate image memory")
-    };
-
-    unsafe {
-        ctx.device.raw_device().bind_image_memory(
-            texture.raw,
-            texture_image_memory,
-            0,
-        )
-        .expect("Failed to bind image memory");
-    }
-
-
-    let image_view = unsafe {
-        ctx.device.raw_device().create_image_view(
-            &vk::ImageViewCreateInfo::default()
-                .image(texture.raw)
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(ctx.window.surface_format_khr.format)
-                .components(vk::ComponentMapping {
-                    r: vk::ComponentSwizzle::IDENTITY,
-                    g: vk::ComponentSwizzle::IDENTITY,
-                    b: vk::ComponentSwizzle::IDENTITY,
-                    a: vk::ComponentSwizzle::IDENTITY,
-                })
-                .subresource_range(vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    base_mip_level: 0,
-                    level_count: 1,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                }),
-            None,
-        )
-        .expect("Failed to create image view")
-    };
-
-    let sampler = unsafe {
-        ctx.device.raw_device().create_sampler(
-            &vk::SamplerCreateInfo::default()
-                .mag_filter(vk::Filter::LINEAR)
-                .min_filter(vk::Filter::LINEAR)
-                .address_mode_u(vk::SamplerAddressMode::REPEAT)
-                .address_mode_v(vk::SamplerAddressMode::REPEAT)
-                .address_mode_w(vk::SamplerAddressMode::REPEAT)
-                .anisotropy_enable(false)
-                .max_anisotropy(1.0)
-                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-                .unnormalized_coordinates(false)
-                .compare_enable(false)
-                .compare_op(vk::CompareOp::ALWAYS)
-                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-                .mip_lod_bias(0.0)
-                .min_lod(0.0)
-                .max_lod(0.0),
-            None,
-        )
-        .expect("Failed to create sampler")
-    };
-
-
-    //------
-
-
-    let buffer_size = size_of::<UniformBufferObject>() as u64;
-
-    let uniform_buffer = GPUBuffer::new(
-        &ctx.device.logical_device.raw,
-        &ctx.device.phys_dev.phys_info.memory_prop,
-        buffer_size,
-        vk::BufferUsageFlags::UNIFORM_BUFFER,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-    ).unwrap();
+    let shader_program = ShaderProgramBuilder::new()
+        .with_device(ctx.device.logical_device.raw.clone())
+        .with_vertex_shader(r"C:\Users\Oleja\Desktop\ferrum\shared\shaders\spv\triangle-vert.spv")
+        .with_fragment_shader(r"C:\Users\Oleja\Desktop\ferrum\shared\shaders\spv\triangle-frag.spv")
+        .build()
+        .unwrap();
 
     let mut ubo = UniformBufferObject {
 
         model: [
-            [0.1, 0.0, 0.0, 0.0],
-            [0.0, 0.1, 0.0, 0.0],
-            [0.0, 0.0, 0.1, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ],
 
@@ -238,7 +119,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
             [0.0, 0.0, -1.0, 0.0],
-            [0.0, 0.0, 5.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
         ],
 
         projection: [
@@ -249,156 +130,56 @@ fn main() -> Result<(), Box<dyn Error>> {
         ],
     };
 
-    uniform_buffer.upload_data(&ctx.device.logical_device.raw, &[ubo]);
+    let uniform_buffer = ctx.create_dynamic_buffer(BufferUsageFlags::UNIFORM_BUFFER, &[ubo]).unwrap();
 
-    let layout = DescriptorSetLayoutBuilder::new()
-        .with_device(ctx.device.raw_device())
-        .with_bindings(&[
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(0)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::VERTEX),
-
-            vk::DescriptorSetLayoutBinding::default()
-                .binding(1)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            ]
-        )
-        .build();
-
-    let descriptor_pool = DescriptorPoolBuilder::new()
-        .with_device(ctx.device.raw_device())
-        .with_max_sets(1)
-        .with_pool_sizes(&[
-            vk::DescriptorPoolSize::default()
-                .ty(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(1),
-
-            vk::DescriptorPoolSize::default()
-                .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(1)
-        ])
-        .build();
-
-    // Выделяем Descriptor Set
-    let layout = std::slice::from_ref(&layout.raw);
-    let allocate_info = vk::DescriptorSetAllocateInfo::default()
-        .descriptor_pool(descriptor_pool.raw)
-        .set_layouts(layout);
-
-    let descriptor_sets = unsafe {
-        ctx.device.logical_device.raw
-            .allocate_descriptor_sets(&allocate_info)
-            .unwrap()
-    };
-
-    let descriptor_set = descriptor_sets[0];
-
-    let buffer_info = [vk::DescriptorBufferInfo::default()
+    let f = vk::DescriptorBufferInfo::default()
         .buffer(uniform_buffer.raw)
         .offset(0)
-        .range(buffer_size)
-    ];
+        .range(size_of_val(&ubo) as u64);
 
-    let image_info = [vk::DescriptorImageInfo {
-        sampler,           // Ваш созданный sampler
-        image_view,        // Ваш созданный image_view
-        image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-    }];
+    let mut m = DescriptorManager::new(ctx.device.clone());
+    let index = m.builder()
+        .with(0, DescriptorType::UNIFORM_BUFFER, ShaderStageFlags::VERTEX, &f)
+        .send()
+        .unwrap();
 
-    let write_descriptor1 = vk::WriteDescriptorSet::default()
-        .dst_set(descriptor_set)
-        .dst_binding(0)  // Как в layout_binding
-        .dst_array_element(0)
-        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-        .buffer_info(&buffer_info);
+    let set = m.get_descriptor_set(index).unwrap();
+    let lay = m.get_layout(index).unwrap();
 
-    let write_descriptor2 = vk::WriteDescriptorSet::default()
-        .dst_set(descriptor_set)
-        .dst_binding(1)  // Как в layout_binding
-        .dst_array_element(0)
-        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .image_info(&image_info);
-
-    unsafe {
-        ctx.device.logical_device.raw
-            .update_descriptor_sets(&[write_descriptor1, write_descriptor2], &[]);
-    }
-
-    let pipeline = StandartPipelineBuilder::new()
-        .with_graphics_device(&ctx)
-        .with_fragment_shader(load_spv(r"..\..\shared\shaders\spv\triangle-frag.spv"))
-        .with_vertex_shader(load_spv(r"..\..\shared\shaders\spv\triangle-vert.spv"))
-        .build(layout[0]);
-
-    //let (data, index) = &load_model(r"..\..\shared\assets\models\cube.obj").expect("EEEER");
-
-    let mesh = load_gltf_model(r"C:\Users\Oleja\Desktop\ferrum\shared\assets\models\girl2.glb").expect("EEEER");
-    let mut data = vec![];
-
-    for (index, _data) in mesh.positions.iter().enumerate() {
-        data.push(Vertex { pos: *_data, color: mesh.colors[index] });
-    }
-
-    let index = mesh.indices;
+    let pipeline = RenderPipelineBuilder::default(ctx.window.caps.current_extent)
+        .with_device(&ctx.device.raw_device())
+        .with_render_pass(&ctx.window.render_pass.raw)
+        .with_vertex_shader(shader_program.vertex_shader)
+        .with_fragment_shader(shader_program.fragment_shader)
+        .with_descriptor_set_layouts(&[lay])
+        .with_vertex_input(
+            PipelineVertexInputStateCreateInfo::default()
+                .vertex_attribute_descriptions(&PBRVertex::attr_desc())
+                .vertex_binding_descriptions(&PBRVertex::bind_desc()),
+        )
+        .build()
+        .expect("Error create pipeline");
 
     let command_pool = CommandPoolBuilder::new()
-        .device(&ctx.device.raw_device())
-        .family_index(ctx.device.universal_queue.graphics_index())
+        .device(ctx.device.raw_device())
+        .family_index(0)
         .build();
 
-    let gpu_buffer = GPUBuffer::new(
-        &ctx.device.raw_device(),
-        &ctx.device.phys_dev.phys_info.memory_prop,
-        (size_of::<Vertex>() * data.len()) as u64,
-        BufferUsageFlags::VERTEX_BUFFER,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
-    ).unwrap();
+    let mut textures_to_free: Option<Vec<TextureId>> = None;
 
-    gpu_buffer.upload_data(ctx.device.raw_device(), &data);
-
-    let index_buffer = GPUBuffer::new(
-        &ctx.device.raw_device(),
-        &ctx.device.phys_dev.phys_info.memory_prop,
-        (std::mem::size_of::<u32>() * index.len()) as u64,
-        BufferUsageFlags::INDEX_BUFFER,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT
-    ).unwrap();
-
-    index_buffer.upload_data(ctx.device.raw_device(), &index);
-
-
-    info!("SIZE: {}", size_of::<Arc<RenderContext>>());
-    //------------------------------
     let mut graph = RenderGraph::new();
     graph.register_command_pool("pool", command_pool);
-    graph.register_buffer("buf", gpu_buffer);
-    graph.register_buffer("index_buf", index_buffer);
-    graph.register_texture("image", texture);
-    graph.register_buffer("image_buffer", image_buffer);
-    graph.register_pipeline("pipe", pipeline);
-    graph.register_descriptor_set("set", descriptor_set);
-
     graph.add_raw_pass("Simple", move |res, ctx, image_index| {
-
         let device = ctx.device.raw_device();
-        let buffer = res.buffers.get("buf").ok_or("ERR")?;
-        let index_buffer = res.buffers.get("index_buf").ok_or("ERR")?;
-        let pipeline = res.pipeline.get("pipe").ok_or("ERR")?;
         let command_pool = res.command_pool.get("pool").ok_or("ERR")?;
-        let set = res.descriptor_set.get("set").unwrap();
-        let tex = res.texture.get("image").unwrap();
-        let image_buffer = res.buffers.get("image_buffer").unwrap();
 
         let current_extent = ctx.window.caps.current_extent;
 
         let command_buffer = if let Some(cbuf) = res.command_buffers.get(&image_index) {
             *cbuf
         } else {
-            let command_buffer = command_pool.create_command_buffers(device, 1, CommandBufferLevel::PRIMARY)[0];
+            let command_buffer =
+                command_pool.create_command_buffers(device, 1, CommandBufferLevel::PRIMARY)[0];
             res.command_buffers.insert(image_index, command_buffer);
             command_buffer
         };
@@ -406,11 +187,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         let render_pass = &ctx.window.render_pass;
         let frame_buffer = ctx.window.frame_buffers.raw[image_index as usize];
 
-        let clear_values = [vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [5.0/255.0, 5.0/255.0, 5.0/255.0, 1.0],
+        let clear_values = [
+
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [5.0 / 255.0, 5.0 / 255.0, 5.0 / 255.0, 1.0],
+                },
             },
-        }];
+
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+
+        ];
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
             .render_pass(render_pass.raw)
@@ -425,88 +217,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE);
 
         unsafe {
-
             device.begin_command_buffer(command_buffer, &begin_info)?;
-
-
-
-            // /////
-
-            let barrier = vk::ImageMemoryBarrier::default()
-                    .old_layout(vk::ImageLayout::UNDEFINED)
-                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                    .image(tex.raw)
-                    .subresource_range(vk::ImageSubresourceRange {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    });
-
-                let src_stage;
-                let dst_stage;
-
-                match (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) {
-                    (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => {
-                        barrier.src_access_mask(vk::AccessFlags::empty());
-                        barrier.dst_access_mask(vk::AccessFlags::TRANSFER_WRITE);
-                        src_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
-                        dst_stage = vk::PipelineStageFlags::TRANSFER;
-                    }
-                    (vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => {
-                        barrier.src_access_mask(vk::AccessFlags::TRANSFER_WRITE);
-                        barrier.dst_access_mask(vk::AccessFlags::SHADER_READ);
-                        src_stage = vk::PipelineStageFlags::TRANSFER;
-                        dst_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
-                    }
-                    _ => panic!("Unsupported layout transition!"),
-                }
-
-            unsafe {
-                ctx.device.raw_device().cmd_pipeline_barrier(
-                    command_buffer,
-                    src_stage,
-                    dst_stage,
-                    vk::DependencyFlags::empty(),
-                    &[],
-                    &[],
-                    &[barrier],
-                );
-            }
-
-            /////
-
-
-            // Копирование данных
-            let buffer_copy = vk::BufferImageCopy::default()
-                .buffer_offset(0)
-                .buffer_row_length(0)
-                .buffer_image_height(0)
-                .image_subresource(vk::ImageSubresourceLayers {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    mip_level: 0,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                })
-                .image_extent(Extent3D {
-                    width: image_width,
-                    height: image_height,
-                    depth: 1,
-                });
-
-
-            unsafe {
-                ctx.device.raw_device().cmd_copy_buffer_to_image(
-                    command_buffer,
-                    image_buffer.raw,
-                    texture.raw,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[buffer_copy],
-                );
-            }
 
             let viewport = vk::Viewport {
                 x: 0.0,
@@ -531,24 +242,86 @@ fn main() -> Result<(), Box<dyn Error>> {
                 vk::SubpassContents::INLINE,
             );
 
-            device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, pipeline.raw_layout, 0, &[*set], &[]);
+            let raw_input = egui::RawInput::default();
 
-            device.cmd_bind_pipeline(
-                command_buffer,
-                PipelineBindPoint::GRAPHICS,
-                pipeline.raw,
-            );
+            let egui::FullOutput {
+                platform_output,
+                textures_delta,
+                shapes,
+                pixels_per_point,
+                ..
+            } = egui_ctx.run(raw_input, |ctx| {
+                egui::CentralPanel::default().show(&ctx, |ui: &mut egui::Ui| {
+                    ui.label("Hello world!");
+                    if ui.button("Click me").clicked() {
+                        // take some action here
+                    }
+                });
+            });
 
-            device.cmd_bind_vertex_buffers(command_buffer, 0, &[buffer.raw], &[0]);
-            device.cmd_bind_index_buffer(command_buffer, index_buffer.raw, 0, vk::IndexType::UINT32);
-            device.cmd_draw_indexed(
+            if !textures_delta.free.is_empty() {
+                //textures_to_free = Some(textures_delta.free.clone());
+            }
+
+            if !textures_delta.set.is_empty() {
+                ui.borrow_mut()
+                    .set_textures(
+                        ctx.device.universal_queue.raw_queue(vk::QueueFlags::GRAPHICS),
+                        command_pool.raw,
+                        textures_delta.set.as_slice(),
+                    )
+                    .expect("Failed to update texture");
+            }
+
+            let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
+            ui.try_borrow_mut().unwrap().cmd_draw(
                 command_buffer,
-                index.len() as u32,
-                1,
-                0,
-                0,
-                0
-            );
+                current_extent,
+                1.0,
+                &clipped_primitives
+            ).unwrap();
+
+            device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, pipeline.raw);
+            device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, pipeline.layout, 0, &[set.raw], &[]);
+
+            for mesh in &model.meshes {
+
+                device.cmd_bind_vertex_buffers(
+                    command_buffer,
+                    0,
+                    &[mesh.primitive.vertex_buffer.raw],
+                    &[0]
+                );
+
+                if mesh.primitive.indices.len() > 0 {
+                    device.cmd_bind_index_buffer(
+                        command_buffer,
+                        mesh.primitive.index_buffer.raw,
+                        0,
+                        vk::IndexType::UINT32
+                    );
+
+                    device.cmd_draw_indexed(
+                        command_buffer,
+                        mesh.primitive.indices.len() as u32,
+                        1,
+                        0,
+                        0,
+                        0
+                    );
+                } else {
+
+                    device.cmd_draw(
+                        command_buffer, 
+                        mesh.primitive.vertices.len() as u32,
+                        1,
+                        0, 
+                        0
+                    );
+                }
+            }
+
+
 
             device.cmd_end_render_pass(command_buffer);
             device.end_command_buffer(command_buffer)?;
@@ -557,31 +330,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(())
     });
 
+    let mut dt = Instant::now();
     let mut global_time = Instant::now();
-    let mut time = Instant::now();
     let mut count_frame = 0;
 
     let mut angle = 0.0f32; // Угол в радианах
     let rotation_speed = 0.0001; // Скорость вращения (рад/сек)
 
-    let _ = main_loop.run(move |ev, ev_window| {
-    match ev {
-        winit::event::Event::WindowEvent { window_id: _, event } => match event {
-            winit::event::WindowEvent::KeyboardInput { event, .. } => {
-                match event {
-                    _ => {}
-                }
+    let _ = main_loop.run(|ev, ev_window| match ev {
+        winit::event::Event::WindowEvent {
+            window_id: _,
+            event,
+        } => match event {
+            winit::event::WindowEvent::KeyboardInput { event, .. } => match event {
+                _ => {}
             },
 
-            winit::event::WindowEvent::MouseWheel { delta, .. } => {
-                match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_x, y) => {
-                        ubo.view[3][2] -= y/10.0;
-                        uniform_buffer.upload_data(&ctx.device.raw_device(), &[ubo]);
-                    },
-
-                    _ => {}
+            winit::event::WindowEvent::MouseWheel { delta, .. } => match delta {
+                winit::event::MouseScrollDelta::LineDelta(_x, y) => {
+                    ubo.view[3][2] -= y/10.0;
+                    uniform_buffer.update_buffer(&[ubo]);
                 }
+                _ => {}
             },
             winit::event::WindowEvent::CloseRequested => ev_window.exit(),
             winit::event::WindowEvent::RedrawRequested => {
@@ -589,19 +359,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 angle += rotation_speed * global_time.elapsed().as_millis() as f32;
                 global_time = Instant::now();
 
-                graph.execute(&ctx);
-                if time.elapsed().as_secs() >= 1 {
-                    info!("FPS: {}", count_frame);
-                    time = Instant::now();
+                if dt.elapsed().as_secs_f32() >= 1.0 {
+                    println!("FPS: {}", count_frame);
+                    dt = Instant::now();
                     count_frame = 0;
-
                 } else {
                     count_frame += 1;
                 }
 
+                graph.execute(&ctx);
+
                 ubo.model = rotation_matrix(angle, [0.0 , 1.0, 0.0]);
-                uniform_buffer.upload_data(&ctx.device.raw_device(), &[ubo]);
-            },
+                uniform_buffer.update_buffer(&[ubo]);
+            }
             winit::event::WindowEvent::Resized(size) => {
 
                 let dev = ctx.device.clone();
@@ -621,17 +391,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                     [0.0, 0.0, -(far * near) / (far - near), 0.0],
                 ];
 
-                uniform_buffer.upload_data(&ctx.device.logical_device.raw, &[ubo]);
-
-            },
+                uniform_buffer.update_buffer(&[ubo]);
+            }
             _ => {}
         },
         winit::event::Event::AboutToWait => {
             ctx.window.raw.request_redraw();
         }
         _ => {}
-    }
     });
+
+    unsafe { ctx.device.raw_device().device_wait_idle() };
 
     Ok(())
 }
