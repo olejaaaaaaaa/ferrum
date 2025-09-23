@@ -73,14 +73,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let egui_ctx = egui::Context::default();
     egui_extras::install_image_loaders(&egui_ctx);
 
-    let egui_winit = egui_winit::State::new(
+    let mut egui_winit = RefCell::new(egui_winit::State::new(
         egui_ctx.clone(),
         egui::ViewportId::ROOT,
         &window,
         None,
         None,
-        None,
-    );
+        None
+    ));
 
     let mut ctx = RenderContext::default(window);
 
@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     ).unwrap()));
 
-    let model = load_gltf(&ctx, r"C:\Users\Oleja\Desktop\ferrum\shared\assets\models\box.glb");
+    let model = load_gltf(&ctx, r"C:\Users\Oleja\Desktop\ferrum\shared\assets\models\girl.glb");
 
     let shader_program = ShaderProgramBuilder::new()
         .with_device(ctx.device.logical_device.raw.clone())
@@ -163,7 +163,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let command_pool = CommandPoolBuilder::new()
         .device(ctx.device.raw_device())
         .family_index(0)
-        .build();
+        .build()
+        .unwrap();
 
     let mut textures_to_free: Option<Vec<TextureId>> = None;
 
@@ -259,6 +260,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 });
             });
 
+            //egui_winit.borrow_mut().handle_platform_output(&ctx.window.raw, platform_output);
+
             if !textures_delta.free.is_empty() {
                 //textures_to_free = Some(textures_delta.free.clone());
             }
@@ -278,7 +281,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 command_buffer,
                 current_extent,
                 1.0,
-                &clipped_primitives
+                clipped_primitives.as_slice()
             ).unwrap();
 
             device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, pipeline.raw);
@@ -334,8 +337,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut global_time = Instant::now();
     let mut count_frame = 0;
 
-    let mut angle = 0.0f32; // Угол в радианах
-    let rotation_speed = 0.0001; // Скорость вращения (рад/сек)
+    let mut angle = 0.0f32;
+    let rotation_speed = 0.0001;
 
     let _ = main_loop.run(|ev, ev_window| match ev {
         winit::event::Event::WindowEvent {

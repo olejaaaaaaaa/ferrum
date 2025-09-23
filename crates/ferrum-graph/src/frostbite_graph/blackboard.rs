@@ -4,14 +4,14 @@ use std::{
 };
 
 pub struct BlackBoard {
-    m_storage: HashMap<TypeId, Box<dyn Any>>
+    storage: HashMap<TypeId, Box<dyn Any>>
 }
 
 impl BlackBoard {
 
     pub fn add<T: Any>(&mut self, value: T) -> &mut T {
         let type_id = TypeId::of::<T>();
-        self.m_storage.insert(type_id, Box::new(value));
+        self.storage.insert(type_id, Box::new(value));
         self.get_mut::<T>()
     }
 
@@ -25,17 +25,17 @@ impl BlackBoard {
 
     pub fn try_get<T: Any>(&self) -> Option<&T> {
         let type_id = TypeId::of::<T>();
-        self.m_storage.get(&type_id).and_then(|boxed| boxed.downcast_ref::<T>())
+        self.storage.get(&type_id).and_then(|boxed| boxed.downcast_ref::<T>())
     }
 
     pub fn try_get_mut<T: Any>(&mut self) -> Option<&mut T> {
         let type_id = TypeId::of::<T>();
-        self.m_storage.get_mut(&type_id).and_then(|boxed| boxed.downcast_mut::<T>())
+        self.storage.get_mut(&type_id).and_then(|boxed| boxed.downcast_mut::<T>())
     }
 
     pub fn has<T: Any>(&self) -> bool {
         let type_id = TypeId::of::<T>();
-        self.m_storage.contains_key(&type_id)
+        self.storage.contains_key(&type_id)
     }
 
 }

@@ -1,10 +1,6 @@
-[package]
-name = "ferrum"
-version = "0.1.0"
-edition = "2024"
-
 [workspace]
 members = [
+    "crates/ferrum-scene",
     "crates/ferrum-physics",
     "crates/ferrum-assets",
     "crates/ferrum-render",
@@ -12,10 +8,13 @@ members = [
     "crates/ferrum-graph",
     "crates/ferrum-sound",
     "crates/ferrum-ui",
-    "crates/ferrum-bin",
-    "examples/cube",
+    "crates/editor-standalone",
     "crates/ferrum-resources",
-    "crates/ferrum-math"
+    "crates/ferrum-math",
+    "crates/ferrum-shapes",
+    "crates/ferrum-types",
+    "crates/ferrum-net",
+    "examples/cube",
 ]
 resolver = "2"
 

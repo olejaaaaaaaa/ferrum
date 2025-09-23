@@ -1,10 +1,11 @@
 use std::any::Any;
 
 use ferrum_render::Texture;
-use crate::frostbite_graph::resource_entry::Resource;
+use crate::frostbite_graph::{render_context::RenderContext, resource_entry::Resource, transient_resources::TransientResources};
 
 pub struct FrameGraphTexture {
-    pub texture: Texture
+    pub tex: Texture,
+    pub tex_desc: TextureDesc
 }
 
 pub struct TextureDesc {
@@ -17,19 +18,19 @@ impl Resource for FrameGraphTexture {
 
     type Desc = TextureDesc;
 
-    fn create(&mut self, descriptor: &Self::Desc, allocator: &dyn Any) {
+    fn create(&mut self, descriptor: &Self::Desc, allocator: &TransientResources) {
         todo!()
     }
 
-    fn destroy(&mut self, descriptor: &Self::Desc, allocator: &dyn Any) {
+    fn destroy(&mut self, descriptor: &Self::Desc, allocator: &TransientResources) {
 
     }
 
-    fn pre_read(&self, descriptor: &Self::Desc, flags: u32, ctx: &dyn std::any::Any) {
+    fn pre_read(&self, descriptor: &Self::Desc, flags: u32, ctx: &RenderContext) {
         todo!()
     }
 
-    fn pre_write(&self, descriptor: &Self::Desc, flags: u32, ctx: &dyn std::any::Any) {
+    fn pre_write(&self, descriptor: &Self::Desc, flags: u32, ctx: &RenderContext) {
         todo!()
     }
 

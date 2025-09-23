@@ -7,4 +7,4 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/olejaaaaaaaa/ferrum/crates/ferrum-cli"
 
 [dependencies]
-clap = "4.5.43"
+#clap = { version = "4.5.43", features = ["derive"] } 

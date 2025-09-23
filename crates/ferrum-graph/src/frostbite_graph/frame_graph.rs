@@ -1,126 +1,145 @@
-use std::any::Any;
-use crate::frostbite_graph::frame_graph_resource::FrameGraphResource;
-use crate::frostbite_graph::resource_entry::{Resource, ResourceEntry};
-use crate::frostbite_graph::resource_node::ResourceNode;
-use crate::frostbite_graph::pass_node::PassNode;
-use crate::frostbite_graph::render_context::RenderContext;
 
-pub type Execute<T> = dyn Fn(&T, &FrameGraphPassResources, &dyn Any);
-pub type Setup<T> = dyn Fn(&FrameGraphBuilder, &mut T);
+// use crate::frostbite_graph::frame_graph_resource::FrameGraphResource;
+// use crate::frostbite_graph::pass_entry::FrameGraphPass;
+// use crate::frostbite_graph::resource_entry::{Resource, ResourceEntry};
+// use crate::frostbite_graph::resource_node::ResourceNode;
+// use crate::frostbite_graph::pass_node::PassNode;
+// use crate::frostbite_graph::render_context::RenderContext;
+// use crate::frostbite_graph::transient_resources::TransientResources;
+// use vk_mem::Allocator;
 
-#[derive(Default)]
-struct FrameGraph {
-    m_passNodes: Vec<PassNode>,
-    m_resourceNodes: Vec<ResourceNode>,
-    m_resourceRegistry: Vec<ResourceEntry>
-}
+// pub type Execute<T> = dyn Fn(&T, &FrameGraphPassResources, &RenderContext);
+// pub type Setup<T> = dyn Fn(&FrameGraphBuilder, &mut T);
 
-struct FrameGraphBuilder<'f, 'p> {
-    m_frameGraph: &'f FrameGraph,
-    m_passNode: &'p PassNode
-}
+// #[derive(Default)]
+// pub struct FrameGraph {
+//     pub allocator: Option<Allocator>,
+//     pub pass_nodes: Vec<PassNode>,
+//     pub resource_nodes: Vec<ResourceNode>,
+//     pub resource_registry: Vec<ResourceEntry>
+// }
 
-impl<'f, 'p> FrameGraphBuilder<'f, 'p> {
+// pub struct FrameGraphBuilder<'f, 'p> {
+//     frame_graph: &'f FrameGraph,
+//     pass_node: &'p PassNode
+// }
 
-    fn create<T: Resource>(&self, name: &'static str, data: T::Desc) -> FrameGraphResource {
-        0
-    }
+// impl<'f, 'p> FrameGraphBuilder<'f, 'p> {
 
-    fn read(&self, id: FrameGraphResource, flags: u32) -> FrameGraphResource {
-        0
-    }
+//     fn create<T: Resource>(&self, name: &'static str, data: T::Desc) -> FrameGraphResource {
+//         0
+//     }
 
-    fn write(&self, id: FrameGraphResource) -> FrameGraphResource {
-        0
-    }
-}
+//     fn read(&self, id: FrameGraphResource, flags: u32) -> FrameGraphResource {
+//         0
+//     }
 
-impl FrameGraph {
+//     fn write(&self, id: FrameGraphResource) -> FrameGraphResource {
+//         0
+//     }
+// }
 
-    fn new() -> Self {
-        FrameGraph { ..Default::default() }
-    }
+// impl FrameGraph {
 
-    fn reserve(&mut self, numPasses: u32, numResources: u32) {
+//     fn new() -> Self {
+//         FrameGraph { ..Default::default() }
+//     }
 
-    }
+//     fn reserve(&mut self, num_passes: u32, num_resources: u32) {
 
-    fn addCallbackPass<T>(&mut self, name: &'static str, setup: &Setup<T>, exec: &Execute<T>) {
+//     }
 
-    }
+//     fn add_callback_pass<T, D>(&mut self, name: &'static str, setup: &Setup<T>, exec: &Execute<T>) -> D {
 
-    fn compile(&mut self) {
+//         if std::mem::size_of_val(&exec) > 1024 {
+//             panic!( "Execute captures too much");
+//         }
 
-    }
+//         let pass = FrameGraphPass::new::<D>(&exec);
+//     }
 
-    fn execute(&self, ctx: &dyn Any, allocator: *const ()) {
+//     fn compile(&mut self) {
 
-    }
-}
+//     }
 
-pub struct FrameGraphPassResources<'f, 'p> {
-    m_frameGraph: &'f FrameGraph,
-    m_passNode: &'p PassNode
-}
+//     fn execute(&self, ctx: &RenderContext, allocator: &TransientResources) {
 
-impl<'a, 'b> FrameGraphPassResources<'a, 'b> {
+//         for i in &self.pass_nodes {
 
-    fn get<T>(&self, res: FrameGraphResource) -> T {
-        todo!()
-    }
+//         }
+//     }
+// }
 
-}
+// pub struct FrameGraphPassResources<'f, 'p> {
+//     frame_graph: &'f FrameGraph,
+//     pass_node: &'p PassNode
+// }
 
-#[cfg(test)]
-mod tests {
+// impl<'a, 'b> FrameGraphPassResources<'a, 'b> {
 
-    use winit::{event_loop::EventLoop, window::Window};
-    use crate::frostbite_graph::addition;
-    use crate::frostbite_graph::frame_graph_texture::{FrameGraphTexture, TextureDesc};
-    use crate::frostbite_graph::render_context::RenderContext;
-    use crate::frostbite_graph::{
-        frame_graph::FrameGraph,
-        frame_graph_resource::FrameGraphResource
-    };
+//     fn get<T>(&self, res: FrameGraphResource) -> T {
+//         todo!()
+//     }
+
+// }
+
+// #[cfg(test)]
+// mod tests {
+
+//     use winit::{event_loop::EventLoop, window::Window};
+//     use crate::frostbite_graph::addition;
+//     use crate::frostbite_graph::frame_graph_texture::{FrameGraphTexture, TextureDesc};
+//     use crate::frostbite_graph::render_context::RenderContext;
+//     use crate::frostbite_graph::transient_resources::TransientResources;
+//     use crate::frostbite_graph::{
+//         frame_graph::FrameGraph,
+//         frame_graph_resource::FrameGraphResource
+//     };
+
+//     use addition::*;
+
+//     #[test]
+//     fn simple() {
 
 
-    use addition::*;
+//         let event_loop = EventLoop::new().unwrap();
+//         let window = Window::new(&event_loop).unwrap();
 
-    #[test]
-    fn simple() {
+//         let ctx = ferrum_render::RenderContext::default(window);
 
-        let event_loop = EventLoop::new().unwrap();
-        let window = Window::new(&event_loop).unwrap();
+//         let alloc_info = vk_mem::AllocatorCreateInfo::new(ctx.device.instance.raw(), ctx.device.raw_device(), ctx.device.phys_dev.raw);
+//         let alloc = unsafe { vk_mem::Allocator::new(alloc_info).unwrap() };
 
-        let ctx = RenderContext::new( );
-        let mut fg = FrameGraph::new();
+//         let transient_resources = TransientResources::new();
 
-        struct PassData {
-            target: FrameGraphResource
-        }
+//         let ctx = RenderContext::new(&ctx, alloc);
+//         let mut fg = FrameGraph::new();
 
-        fg.addCallbackPass("SimplePass",
-        &|builder, data: &mut PassData| {
-            data.target = builder.create::<FrameGraphTexture>("Foo", TextureDesc {
-                width: 640,
-                height: 480,
-                format: ash::vk::Format::R8G8B8A8_SRGB
-            });
-            data.target = builder.write(data.target);
-        },
-        &|data: &PassData, resources, ctx| {
-            let ctx = ctx.downcast_ref::<RenderContext>().unwrap();
-            let texture = resources.get::<FrameGraphTexture>(data.target);
-            ctx.beginRendering();
-            ctx.bindTexture();
-            ctx.draw();
-            ctx.endRendering();
-        }
+//         struct PassData {
+//             target: FrameGraphResource
+//         }
 
-        );
+//         fg.add_callback_pass::<PassData>("SimplePass",
+//         &|builder, data: &mut PassData| {
 
-        fg.compile();
-        fg.execute(&ctx, &() as *const ());
+//             data.target = builder.create::<FrameGraphTexture>("Foo", TextureDesc {
+//                 width: 640,
+//                 height: 480,
+//                 format: ash::vk::Format::R8G8B8A8_SRGB
+//             });
+//             data.target = builder.write(data.target);
+//         },
+//         &|data: &PassData, resources, ctx| {
+//             let texture = resources.get::<FrameGraphTexture>(data.target);
+//             ctx.begin_rendering();
+//             ctx.bind_texture(0, &texture.tex);
+//             ctx.draw();
+//             ctx.end_rendering();
+//         }
+//         );
 
-    }
-}
+//         fg.compile();
+//         fg.execute(&ctx, &transient_resources);
+
+//     }
+// }

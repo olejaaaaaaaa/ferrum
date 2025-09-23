@@ -1,6 +1,5 @@
-
-
-use std::env;
+use ferrum_graph::RenderGraph;
+use ferrum_render::RenderContext;
 
 use winit::error::EventLoopError;
 use winit::event_loop::EventLoopWindowTarget;
@@ -8,9 +7,9 @@ use winit::event::Event;
 use winit::event_loop::EventLoop;
 use winit::window::{self, Window, WindowBuilder};
 use winit::event::WindowEvent;
+use crate::engine::Engine;
 
 use super::EditorArgs;
-
 pub type EventHandler<T> = Box<dyn FnMut(&Event<T>, &EventLoopWindowTarget<T>)>;
 
 ///
@@ -18,23 +17,27 @@ pub type EventHandler<T> = Box<dyn FnMut(&Event<T>, &EventLoopWindowTarget<T>)>;
 ///
 pub struct Editor<T: 'static> {
     /// Main game loop
-    event_loop: EventLoop<T>,
-    /// Window
-    window: Window,
+    main_loop: EventLoop<T>,
     /// Event handlers game logics
-    event_handlers: Vec<EventHandler<T>>
+    event_handlers: Vec<EventHandler<T>>,
+    /// Engine
+    engine: Engine<T>
+
 }
 
 impl<T> Editor<T> {
 
     /// Create Editor
-    pub fn new(event_loop: EventLoop<T>, args: EditorArgs) -> Self {
+    pub fn new(event_loop: EventLoop<T>, mut args: EditorArgs) -> Self {
 
-        let window = Self::build_window(&event_loop, &args);
+        let window = Self::build_window(&event_loop, &mut args);
+        let ctx = RenderContext::default(window);
+        let graph = RenderGraph::new();
+        let engine = Engine::<T>::new(ctx, graph);
 
         Self {
-            event_loop,
-            window,
+            main_loop: event_loop,
+            engine,
             event_handlers: Vec::new()
         }
     }
@@ -42,16 +45,6 @@ impl<T> Editor<T> {
     /// Add custom event handler
     pub fn add_event_handler(&mut self, handler: EventHandler<T>) {
         self.event_handlers.push(handler);
-    }
-
-    fn create_drag_drop_handler() -> EventHandler<T> {
-        Box::new(move |event, target| {
-            if let Event::WindowEvent { event, .. } = event {
-                if let WindowEvent::DroppedFile(path) = event {
-                    println!("File dropped: {:?}", path);
-                }
-            }
-        })
     }
 
     /// Event handler for Close Request
@@ -63,16 +56,6 @@ impl<T> Editor<T> {
                     WindowEvent::CloseRequested => {
                         event_loop_target.exit();
                     }
-                    WindowEvent::KeyboardInput { event, .. } => {
-                        if event.state == winit::event::ElementState::Pressed {
-                            match event.logical_key {
-                                winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape) => {
-                                    event_loop_target.exit();
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
                     _ => {}
                 },
                 _ => {}
@@ -81,7 +64,10 @@ impl<T> Editor<T> {
     }
 
     /// Build Default Window with size: 600x480
-    fn build_window(event_loop: &EventLoop<T>, args: &EditorArgs) -> winit::window::Window {
+    fn build_window(event_loop: &EventLoop<T>, args: &mut EditorArgs) -> winit::window::Window {
+
+        args.height = if (args.height) == 0 { 480 } else { args.height };
+        args.width = if (args.width) == 0 { 600 } else { args.width };
 
         let window = WindowBuilder::new()
             .with_title("Ferrum Editor")
@@ -96,13 +82,16 @@ impl<T> Editor<T> {
     pub fn run(mut self) -> Result<(), winit::error::EventLoopError> {
 
         self.event_handlers.push(Self::default_event_handler());
-        self.event_handlers.push(Self::create_drag_drop_handler());
+        self.event_handlers.extend(self.engine.event_handlers);
 
-        let path = env::args().collect::<Vec<String>>();
+        self.main_loop.run(move |event, target| {
 
-        self.event_loop.run(move |event, target| {
             for handler in &mut self.event_handlers {
                 handler(&event, target);
+            }
+
+            if let Event::AboutToWait = event {
+                self.engine.ctx.window.raw.request_redraw();
             }
         })
     }

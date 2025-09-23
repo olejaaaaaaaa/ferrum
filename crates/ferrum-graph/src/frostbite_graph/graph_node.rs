@@ -1,18 +1,25 @@
 
-
 pub struct GraphNode {
-    m_name: &'static str,
-    m_id: u32,
-    m_refCount: i32
+    name: &'static str,
+    id: u32,
+    ref_count: i32
 }
 
 impl GraphNode {
 
     pub fn new(name: &'static str, id: u32) -> Self {
-        Self { m_name: name, m_id: id, m_refCount: 0 }
+        Self { name: name, id: id, ref_count: 0 }
     }
 
-    pub fn getId(&self) -> u32 { return self.m_id; }
-    pub fn getName(&self) -> &'static str { return self.m_name; }
-    pub fn getRefCount(&self) -> i32 { return self.m_refCount; }
+    pub fn get_id(&self) -> u32 {
+        self.id
+    }
+
+    pub fn get_name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn get_ref_count(&self) -> i32 {
+        self.ref_count
+    }
 }

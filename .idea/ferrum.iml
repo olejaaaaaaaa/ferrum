@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/crates/editor-standalone/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-assets/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-cli/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-graph/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-math/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-physics/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-render/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-resources/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-sound/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/ferrum-ui/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/cube/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

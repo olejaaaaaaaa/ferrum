@@ -1,4 +1,4 @@
 
-# Ferrum-ui
+# Editor
 
-This repository provides the core components of mathematics
+This repository provides editor for engine

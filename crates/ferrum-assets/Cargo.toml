@@ -9,8 +9,12 @@ repository = "https://github.com/olejaaaaaaaa/ferrum/crates/ferrum-assets"
 [dependencies]
 gltf = "1.4.1"
 bytemuck = "1.0"
-image = "0.25.6"
 log = "0.4"
+glam = "*"
+ash = "*"
+ferrum-render = { path = "../ferrum-render" }
+ferrum-types = { path = "../ferrum-types" }
+image = { version = "0.25.6", features = ["png", "jpeg"] }
 
 [features]
 default = ["gltf"]

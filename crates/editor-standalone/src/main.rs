@@ -1,6 +1,7 @@
 #![allow(warnings)]
 
 mod editor;
+mod engine;
 use editor::Editor;
 use clap::*;
 use winit::event_loop::EventLoop;
@@ -10,14 +11,17 @@ use winit::error::EventLoopError;
 #[command(version, about, long_about = None)]
 pub struct EditorArgs {
     /// path to game script
-    #[arg(short, long, default_value_t = String::new())]
+    #[arg(long, default_value_t = String::new())]
     path: String,
-
+    /// Width of Window
     #[arg(long, default_value_t = 600)]
     width: u32,
-
+    /// Height of WIndow
     #[arg(long, default_value_t = 480)]
-    height: u32
+    height: u32,
+    /// Off/On VSync
+    #[arg(long, default_value_t = true)]
+    pub vsync: bool,
 }
 
 fn main() -> Result<(), EventLoopError>{

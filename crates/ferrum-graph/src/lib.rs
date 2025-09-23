@@ -1,36 +1,18 @@
 use std::{collections::HashMap, error::Error};
-use ash::vk::{self, CommandBuffer, DescriptorSet};
-use ferrum_render::{CommandPool, FrameSync, GPUBuffer, RenderContext, RenderPass, RenderPipeline, Texture};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ResourceAccess {
-    Read,
-    Write,
-    ColorAttachment,
-    DepthStencilAttachment,
-    ShaderResource,
-}
+// use std::{collections::HashMap, error::Error};
+use ash::vk::{self, CommandBuffer, DescriptorSet, QueueFlags};
+use ferrum_render::{CommandPool, FrameSync, RenderContext, RenderPass, RenderPipeline};
 
-#[derive(Debug, Clone)]
-pub struct ResourceBarrier {
-    pub resource_name: &'static str,
-    pub from: ResourceAccess,
-    pub to: ResourceAccess,
-}
+mod render_graph;
+//mod frostbite_graph;
 
-pub struct RenderPassNode {
-    pub name: &'static str,
-    pub dependencies: Vec<&'static str>,
-    pub barriers: Vec<ResourceBarrier>,
-    pub execute: Box<dyn Fn(&mut RenderGraphResource, &RenderContext, u32) -> Result<(), Box<dyn Error>>>,
-}
 
 #[derive(Default)]
 pub struct RenderGraphResource {
     pub pipeline: HashMap<&'static str, RenderPipeline>,
-    pub buffers: HashMap<&'static str, GPUBuffer>,
+    pub buffers: HashMap<&'static str, bool>,
     pub descriptor_set: HashMap<&'static str, DescriptorSet>,
-    pub texture: HashMap<&'static str, Texture>,
     pub command_buffers: HashMap<u32, CommandBuffer>,
     pub command_pool: HashMap<&'static str, CommandPool>,
     pub render_pass: HashMap<&'static str, RenderPass>
@@ -50,10 +32,6 @@ impl RenderGraph {
         Self { ..Default::default() }
     }
 
-    pub fn register_texture(&mut self, name: &'static str, tex: Texture) {
-        self.resources.texture.insert(name, tex);
-    }
-
     pub fn register_descriptor_set(&mut self, name: &'static str, set: DescriptorSet) {
         self.resources.descriptor_set.insert(name, set);
     }
@@ -64,10 +42,6 @@ impl RenderGraph {
 
     pub fn register_command_pool(&mut self, name: &'static str, pool: CommandPool) {
         self.resources.command_pool.insert(name, pool);
-    }
-
-    pub fn register_buffer(&mut self, name: &'static str, buffer: GPUBuffer) {
-        self.resources.buffers.insert(name, buffer);
     }
 
     pub fn register_pipeline(&mut self, name: &'static str, pipeline: RenderPipeline) {
@@ -98,7 +72,7 @@ impl RenderGraph {
             let current_frame = self.current_frame;
             let fence = self.sync[current_frame].fence;
             let swapchain = &ctx.window.swapchain;
-            let queue = ctx.device.universal_queue.raw_graphics();
+            let queue = ctx.device.universal_queue.raw_queue(QueueFlags::GRAPHICS);
             let device = ctx.device.raw_device();
             let sync = &self.sync;
 
@@ -108,9 +82,8 @@ impl RenderGraph {
                 device.reset_fences(&[fence]).unwrap();
             }
 
-            // 3. Получить новое изображение из swapchain
-            let (image_index, b) = unsafe {
-                swapchain.swapchain_load.acquire_next_image(
+            let (image_index, _) = unsafe {
+                swapchain.swapchain_loader.acquire_next_image(
                     swapchain.raw,
                     u64::MAX,
                     sync[current_frame].image_available,
@@ -118,9 +91,6 @@ impl RenderGraph {
                 )
             }.unwrap();
 
-            //log::info!("current frame: {} current image_index: {}", current_frame, image_index);
-
-            // 4. Выполнить рендер-пассы (теперь безопасно)
             if let Err(err) = pass(&mut self.resources, ctx, image_index) {
                 log::error!("Error in {:?} pass: {:?}", name, err);
                 continue;
@@ -150,7 +120,7 @@ impl RenderGraph {
                 .image_indices(&binding3);
 
             unsafe {
-                swapchain.swapchain_load.queue_present(queue, &present_info).unwrap();
+                swapchain.swapchain_loader.queue_present(queue, &present_info).unwrap();
             }
 
             self.current_frame = (current_frame + 1) % self.sync.len();
@@ -158,3 +128,10 @@ impl RenderGraph {
     }
 }
 
+
+
+// impl Drop for RenderGraph {
+//     fn drop(&mut self) {
+//         //TODO: Destroy Commands Buffers
+//     }
+// }

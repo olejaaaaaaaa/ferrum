@@ -1,12 +1,18 @@
 use crate::frostbite_graph::resource_entry::Type;
 
 pub struct ResourceNode {
-    m_type: Type,
-    m_id: u32,
-    m_version: u32,
+    ty: Type,
+    id: u32,
+    version: u32,
 }
 
 impl ResourceNode {
-    fn getResourceId(&self) -> u32 { self.m_id }
-    fn getVersion(&self) -> u32 { self.m_version }
+
+    fn get_resource_id(&self) -> u32 {
+        self.id
+    }
+    fn get_version(&self) -> u32 {
+        self.version
+    }
+    
 }
