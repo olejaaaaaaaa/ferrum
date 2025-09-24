@@ -3,10 +3,12 @@ use ash::vk::{CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, Comm
 use crate::{VulkanError, VulkanResult};
 
 pub struct CommandPool {
-    pub raw: ash::vk::CommandPool
+    pub raw: ash::vk::CommandPool,
+    pub queue_index: u32
 }
 
 impl CommandPool {
+
     pub fn create_command_buffers(&self, device: &ash::Device, count: u32, level: CommandBufferLevel) -> Vec<CommandBuffer>{
 
         let allocate_info = CommandBufferAllocateInfo::default()
@@ -43,14 +45,19 @@ impl<'n> CommandPoolBuilder<'n> {
 
     pub fn build(self) -> VulkanResult<CommandPool> {
 
+        let family_index = self.family_index.unwrap();
+
         let create_info = CommandPoolCreateInfo::default()
             .flags(CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(self.family_index.unwrap());
+            .queue_family_index(family_index);
 
         let command_pool = unsafe { self.device.unwrap().create_command_pool(&create_info, None).map_err(|e| {
             VulkanError::Unknown
         })}?;
 
-        Ok(CommandPool { raw: command_pool })
+        Ok(CommandPool {
+            raw: command_pool,
+            queue_index: family_index
+        })
     }
 }

@@ -1,8 +1,8 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 // use std::{collections::HashMap, error::Error};
 use ash::vk::{self, CommandBuffer, DescriptorSet, QueueFlags};
-use ferrum_render::{CommandPool, FrameSync, RenderContext, RenderPass, RenderPipeline};
+use ferrum_render::{CommandPool, FrameSync, GraphicsDevice, RenderContext, RenderPass, RenderPipeline};
 
 mod render_graph;
 //mod frostbite_graph;
@@ -18,18 +18,24 @@ pub struct RenderGraphResource {
     pub render_pass: HashMap<&'static str, RenderPass>
 }
 
-#[derive(Default)]
 pub struct RenderGraph {
     pub resources: RenderGraphResource,
     pub nodes: HashMap<&'static str, Box<dyn Fn(&mut RenderGraphResource, &RenderContext, u32) -> Result<(), Box<dyn Error>>>>,
     pub sync: Vec<FrameSync>,
-    pub current_frame: usize
+    pub current_frame: usize,
+    pub ctx: Option<Arc<GraphicsDevice>>
 }
 
 impl RenderGraph {
 
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            resources: Default::default(),
+            nodes: HashMap::new(),
+            sync: vec![],
+            current_frame: 0,
+            ctx: None
+        }
     }
 
     pub fn register_descriptor_set(&mut self, name: &'static str, set: DescriptorSet) {
@@ -60,12 +66,14 @@ impl RenderGraph {
 
     pub fn execute(&mut self, ctx: &RenderContext) {
 
+        self.ctx = Some(ctx.device.clone());
+
         for (name, pass) in &self.nodes {
 
             if self.sync.is_empty() {
                 let frame_count = ctx.window.frame_buffers.raw.len();
                 for _ in 0..frame_count {
-                    self.sync.push(FrameSync::new(ctx.device.raw_device()));
+                    self.sync.push(FrameSync::new(ctx.device.logical_device.raw.clone()).unwrap());
                 }
             }
 
@@ -75,8 +83,7 @@ impl RenderGraph {
             let queue = ctx.device.universal_queue.raw_queue(QueueFlags::GRAPHICS);
             let device = ctx.device.raw_device();
             let sync = &self.sync;
-
-            // 2. Дождаться завершения предыдущего кадра
+            
             unsafe {
                 device.wait_for_fences(&[fence], false, u64::MAX).unwrap();
                 device.reset_fences(&[fence]).unwrap();
@@ -130,8 +137,15 @@ impl RenderGraph {
 
 
 
-// impl Drop for RenderGraph {
-//     fn drop(&mut self) {
-//         //TODO: Destroy Commands Buffers
-//     }
-// }
+impl Drop for RenderGraph {
+    fn drop(&mut self) {
+        let ctx = self.ctx.clone().unwrap();
+
+        for (_, pool) in &self.resources.command_pool {
+            unsafe {
+                ctx.raw_device().destroy_command_pool(pool.raw, None);
+            }
+        }
+
+    }
+}
