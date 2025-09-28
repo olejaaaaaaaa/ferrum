@@ -19,4 +19,4 @@ jobs:
     
     - name: Build and run cube example
       run: |
-        cargo run --example cube
+        cargo run --bin cube --release
