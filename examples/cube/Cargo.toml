@@ -25,4 +25,7 @@ ferrum-ui = { path = "../../crates/ferrum-ui" }
 ferrum-resources = { path = "../../crates/ferrum-resources" }
 glam = "*"
 raw-window-handle = "0.6.2"
+tracing-subscriber = { version = "0.3.20", features = ["fmt"] }
+tracing.workspace = true
+mlua = { version = "0.11.3", features = ["vendored", "lua54"] }
 

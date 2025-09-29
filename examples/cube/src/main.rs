@@ -1,7 +1,7 @@
 #![warn(unused_qualifications)]
 
 use std::{
-    cell::RefCell, collections::HashMap, error::Error, ffi::CStr, fs::{read_dir, write, DirEntry, File}, io::Read, mem::{offset_of, ManuallyDrop}, panic, path::Path, process::Command, rc::Rc, sync::Arc, time::{Duration, Instant}, u64
+    cell::RefCell, collections::HashMap, error::Error, ffi::CStr, fs::{read_dir, write, DirEntry, File}, io::Read, mem::{offset_of, ManuallyDrop}, panic, path::{Path, PathBuf}, process::Command, rc::Rc, sync::Arc, time::{Duration, Instant}, u64
 };
 
 use ash::{
@@ -57,11 +57,56 @@ fn rotation_matrix(angle_rad: f32, axis: [f32; 3]) -> [[f32; 4]; 4] {
     ]
 }
 
+use mlua::prelude::*;
+
+
+struct ScriptManager {
+    scripts: HashMap<PathBuf, String>,
+    lua: Lua
+}
+
+impl ScriptManager {
+    pub fn new() -> Self {
+        let lua = Lua::new();
+        Self {
+            scripts: HashMap::new(),
+            lua
+        }
+    }
+
+    pub fn update(&self) {
+        for (path, script_text) in &self.scripts {
+            let lua = &self.lua;
+            let res = lua.load(script_text).exec();
+            if let Err(x) = res {
+                tracing::error!("Error execute lua script: {:?} with Error: {:?}", path.as_path(), x);
+            }
+        }
+    }
+
+    pub fn load_script(&mut self, path: PathBuf) {
+        let mut file = File::open(&path);
+
+        if let Ok(mut file) = file {
+            let mut text = String::new();
+            file.read_to_string(&mut text).unwrap();
+            self.scripts.insert(path, text);
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
 
     unsafe { std::env::set_var("RUST_LOG", "DEBUG") };
 
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_max_level(tracing_subscriber::filter::LevelFilter::DEBUG)
+        .with_line_number(false)
+        .with_timer(false)
+        .with_file(false)
+        .with_target(false)
+        .event_format(tracing_subscriber::fmt::format().pretty())
+        .init();
 
     let main_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = winit::window::WindowBuilder::new()
@@ -70,39 +115,42 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build(&main_loop)
         .unwrap();
 
-    let egui_ctx = egui::Context::default();
-    egui_extras::install_image_loaders(&egui_ctx);
+    let mut scripts = ScriptManager::new();
 
-    let mut egui_winit = RefCell::new(egui_winit::State::new(
-        egui_ctx.clone(),
-        egui::ViewportId::ROOT,
-        &window,
-        None,
-        None,
-        None
-    ));
+    // let egui_ctx = egui::Context::default();
+    // egui_extras::install_image_loaders(&egui_ctx);
+
+    // let mut egui_winit = RefCell::new(egui_winit::State::new(
+    //     egui_ctx.clone(),
+    //     egui::ViewportId::ROOT,
+    //     &window,
+    //     None,
+    //     None,
+    //     None
+    // ));
 
     let mut ctx = RenderContext::default(window);
 
-    let mut ui: Arc<RefCell<Renderer>> = Arc::new(RefCell::new(Renderer::with_default_allocator(
-        ctx.device.raw_instance(),
-        ctx.device.phys_dev.raw,
-        ctx.device.logical_device.raw.clone().as_ref().clone(),
-        ctx.window.render_pass.raw,
-        Options {
-            in_flight_frames: ctx.window.frame_buffers.raw.len(),
-            enable_depth_test: false,
-            enable_depth_write: false,
-            srgb_framebuffer: true
-        }
-    ).unwrap()));
+    let smpler = ctx.create_default_sampler().unwrap();
+    // let mut ui: Arc<RefCell<Renderer>> = Arc::new(RefCell::new(Renderer::with_default_allocator(
+    //     ctx.device.raw_instance(),
+    //     ctx.device.phys_dev.raw,
+    //     ctx.device.logical_device.raw.clone().as_ref().clone(),
+    //     ctx.window.render_pass.raw,
+    //     Options {
+    //         in_flight_frames: ctx.window.frame_buffers.raw.len(),
+    //         enable_depth_test: false,
+    //         enable_depth_write: false,
+    //         srgb_framebuffer: true
+    //     }
+    // ).unwrap()));
 
-    let model = load_gltf(&ctx, r"C:\Users\Oleja\Desktop\ferrum\shared\assets\models\girl.glb");
+    let model = load_gltf(&ctx, "../../shared/assets/models/girl.glb");
 
     let shader_program = ShaderProgramBuilder::new()
         .with_device(ctx.device.logical_device.raw.clone())
-        .with_vertex_shader(r"C:\Users\Oleja\Desktop\ferrum\shared\shaders\spv\triangle-vert.spv")
-        .with_fragment_shader(r"C:\Users\Oleja\Desktop\ferrum\shared\shaders\spv\triangle-frag.spv")
+        .with_vertex_shader(r"../../shared/shaders/spv/triangle-vert.spv")
+        .with_fragment_shader(r"../../shared/shaders/spv/triangle-frag.spv")
         .build()
         .unwrap();
 
@@ -147,7 +195,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let lay = m.get_layout(index).unwrap();
 
     let pipeline = RenderPipelineBuilder::default(ctx.window.caps.current_extent)
-        .with_device(&ctx.device.raw_device())
+        .with_device(ctx.device.logical_device.raw.clone())
         .with_render_pass(&ctx.window.render_pass.raw)
         .with_vertex_shader(shader_program.vertex_shader)
         .with_fragment_shader(shader_program.fragment_shader)
@@ -161,7 +209,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .expect("Error create pipeline");
 
     let command_pool = CommandPoolBuilder::new()
-        .device(ctx.device.raw_device())
+        .device(ctx.device.logical_device.raw.clone())
         .family_index(0)
         .build()
         .unwrap();
@@ -180,7 +228,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             *cbuf
         } else {
             let command_buffer =
-                command_pool.create_command_buffers(device, 1, CommandBufferLevel::PRIMARY)[0];
+                command_pool.create_command_buffers(1, CommandBufferLevel::PRIMARY).unwrap().raw[0];
             res.command_buffers.insert(image_index, command_buffer);
             command_buffer
         };
@@ -243,46 +291,46 @@ fn main() -> Result<(), Box<dyn Error>> {
                 vk::SubpassContents::INLINE,
             );
 
-            let raw_input = egui::RawInput::default();
+            // let raw_input = egui::RawInput::default();
 
-            let egui::FullOutput {
-                platform_output,
-                textures_delta,
-                shapes,
-                pixels_per_point,
-                ..
-            } = egui_ctx.run(raw_input, |ctx| {
-                egui::CentralPanel::default().show(&ctx, |ui: &mut egui::Ui| {
-                    ui.label("Hello world!");
-                    if ui.button("Click me").clicked() {
-                        // take some action here
-                    }
-                });
-            });
+            // let egui::FullOutput {
+            //     platform_output,
+            //     textures_delta,
+            //     shapes,
+            //     pixels_per_point,
+            //     ..
+            // } = egui_ctx.run(raw_input, |ctx| {
+            //     egui::CentralPanel::default().show(&ctx, |ui: &mut egui::Ui| {
+            //         ui.label("Hello world!");
+            //         if ui.button("Click me").clicked() {
+            //             // take some action here
+            //         }
+            //     });
+            // });
 
             //egui_winit.borrow_mut().handle_platform_output(&ctx.window.raw, platform_output);
 
-            if !textures_delta.free.is_empty() {
-                //textures_to_free = Some(textures_delta.free.clone());
-            }
+            // if !textures_delta.free.is_empty() {
+            //     //textures_to_free = Some(textures_delta.free.clone());
+            // }
 
-            if !textures_delta.set.is_empty() {
-                ui.borrow_mut()
-                    .set_textures(
-                        ctx.device.universal_queue.raw_queue(vk::QueueFlags::GRAPHICS),
-                        command_pool.raw,
-                        textures_delta.set.as_slice(),
-                    )
-                    .expect("Failed to update texture");
-            }
+            // if !textures_delta.set.is_empty() {
+            //     ui.borrow_mut()
+            //         .set_textures(
+            //             ctx.device.universal_queue.raw_queue(vk::QueueFlags::GRAPHICS),
+            //             command_pool.raw,
+            //             textures_delta.set.as_slice(),
+            //         )
+            //         .expect("Failed to update texture");
+            // }
 
-            let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
-            ui.try_borrow_mut().unwrap().cmd_draw(
-                command_buffer,
-                current_extent,
-                1.0,
-                clipped_primitives.as_slice()
-            ).unwrap();
+            // let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
+            // ui.try_borrow_mut().unwrap().cmd_draw(
+            //     command_buffer,
+            //     current_extent,
+            //     1.0,
+            //     clipped_primitives.as_slice()
+            // ).unwrap();
 
             device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, pipeline.raw);
             device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, pipeline.layout, 0, &[set.raw], &[]);
@@ -349,6 +397,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 _ => {}
             },
 
+            winit::event::WindowEvent::DroppedFile(path) => {
+                scripts.load_script(path);
+            }
+
             winit::event::WindowEvent::MouseWheel { delta, .. } => match delta {
                 winit::event::MouseScrollDelta::LineDelta(_x, y) => {
                     ubo.view[3][2] -= y/10.0;
@@ -359,11 +411,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             winit::event::WindowEvent::CloseRequested => ev_window.exit(),
             winit::event::WindowEvent::RedrawRequested => {
 
+                scripts.update();
+
                 angle += rotation_speed * global_time.elapsed().as_millis() as f32;
                 global_time = Instant::now();
 
                 if dt.elapsed().as_secs_f32() >= 1.0 {
-                    println!("FPS: {}", count_frame);
+                    if count_frame < 58 {
+                        tracing::warn!("Low FPS: {}", count_frame);
+                    }
                     dt = Instant::now();
                     count_frame = 0;
                 } else {
