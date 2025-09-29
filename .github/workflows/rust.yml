@@ -19,5 +19,4 @@ jobs:
     
     - name: Build and run cube example
       run: |
-        cd ferrum/examples/cube
-        cargo run --release
+        cargo run --bin cube --release
