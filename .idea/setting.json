@@ -1,0 +1,8 @@
+{
+    "Lua.workspace.library": ["./"],
+    "Lua.diagnostics.globals": [
+        "create_entity",
+        "play_sound",
+        "delta_time"
+    ]
+}

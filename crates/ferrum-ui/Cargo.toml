@@ -8,7 +8,7 @@ repository = "https://github.com/olejaaaaaaaa/ferrum/crates/ferrum-ui"
 
 [dependencies]
 ash = { version = "0.38.0",  features = ["debug", "std"] }
-egui-ash-renderer = { git = "https://github.com/adrien-ben/egui-ash-renderer" }
+#egui-ash-renderer = { git = "https://github.com/adrien-ben/egui-ash-renderer" }
 log = "0.4"
 winit = { version = "0.29", features = ["rwh_06"] }
 ferrum-render = { path = "../ferrum-render" }

@@ -11,5 +11,5 @@ ferrum-render = { path = "../../crates/ferrum-render" }
 ferrum-graph = { path = "../../crates/ferrum-graph" }
 ferrum-assets = { path = "../../crates/ferrum-assets" }
 ferrum-ui = { path = "../../crates/ferrum-ui" }
-winit = { version = "0.30.12", features = ["rwh_06"] }
+winit.workspace = true
 clap = { version = "4.5.43", features = ["derive"] }
